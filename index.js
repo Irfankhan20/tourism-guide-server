@@ -100,6 +100,18 @@ async function run() {
       res.send({ admin });
     });
 
+    //user tourGuide check
+    app.get("/user/tourGuide/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      let tourGuide = false;
+      if (user) {
+        tourGuide = user?.userType === "tourGuide";
+      }
+      res.send({ tourGuide });
+    });
+
     //all users
     app.get("/users", async (req, res) => {
       const result = await userCollection.find().toArray();
