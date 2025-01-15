@@ -28,7 +28,7 @@ async function run() {
     const packageCollection = client.db("uniqueTravel").collection("packages");
 
     //get 3 random packages
-    app.get("/packages", async (req, res) => {
+    app.get("/threePackages", async (req, res) => {
       const result = await packageCollection
         .aggregate([{ $sample: { size: 3 } }])
         .toArray();
@@ -43,16 +43,28 @@ async function run() {
       res.send(result);
     });
 
-    // packages related apis======================================
+    //get all packages
+    app.get("/packages", async (req, res) => {
+      const result = await packageCollection.find().toArray();
+      res.send(result);
+    });
+
+    // stories related apis======================================
     const storiesCollection = client
       .db("uniqueTravel")
       .collection("touristStories");
 
-    //get 4 random package
+    //get 4 random stories
     app.get("/stories", async (req, res) => {
       const result = await storiesCollection
         .aggregate([{ $sample: { size: 4 } }])
         .toArray();
+      res.send(result);
+    });
+
+    //get all stories
+    app.get("/allStories", async (req, res) => {
+      const result = await storiesCollection.find().toArray();
       res.send(result);
     });
 
@@ -67,8 +79,32 @@ async function run() {
       res.send(result);
     });
 
+    //get all allGuides
+    app.get("/allGuides", async (req, res) => {
+      const result = await guideCollection.find().toArray();
+      res.send(result);
+    });
+
     //user related apis============================================
     const userCollection = client.db("uniqueTravel").collection("users");
+
+    //user admin check
+    app.get("/user/admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.userType === "admin";
+      }
+      res.send({ admin });
+    });
+
+    //all users
+    app.get("/users", async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
 
     //user post
     app.post("/user", async (req, res) => {
