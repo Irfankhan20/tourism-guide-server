@@ -43,6 +43,19 @@ async function run() {
       res.send(result);
     });
 
+    // packages related apis======================================
+    const storiesCollection = client
+      .db("uniqueTravel")
+      .collection("touristStories");
+
+    //get 4 random package
+    app.get("/stories", async (req, res) => {
+      const result = await storiesCollection
+        .aggregate([{ $sample: { size: 4 } }])
+        .toArray();
+      res.send(result);
+    });
+
     // guides related apis======================================
     const guideCollection = client.db("uniqueTravel").collection("tourGuides");
 
