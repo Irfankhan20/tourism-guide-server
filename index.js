@@ -62,9 +62,16 @@ async function run() {
       res.send(result);
     });
 
-    //get all stories
+    //get all storiess
     app.get("/allStories", async (req, res) => {
       const result = await storiesCollection.find().toArray();
+      res.send(result);
+    });
+
+    //post story
+    app.post("/addStory", async (req, res) => {
+      const data = req.body;
+      const result = await storiesCollection.insertOne(data);
       res.send(result);
     });
 
@@ -113,8 +120,31 @@ async function run() {
     });
 
     //all users
-    app.get("/users", async (req, res) => {
+    app.get("/allUsers", async (req, res) => {
       const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+
+    //user get by email
+    app.get("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      res.send(user);
+    });
+
+    //update an user
+    app.patch("/update-profile/:id", async (req, res) => {
+      const data = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          name: data.name,
+          photoURL: data.photoURL,
+        },
+      };
+      const result = await userCollection.updateOne(query, updatedDoc);
       res.send(result);
     });
 
