@@ -50,6 +50,16 @@ async function run() {
     });
 
     // stories related apis======================================
+    const bookingsCollection = client.db("uniqueTravel").collection("bookings");
+
+    //post booking
+    app.post("/booking", async (req, res) => {
+      const data = req.body;
+      const result = await bookingsCollection.insertOne(data);
+      res.send(result);
+    });
+
+    // stories related apis======================================
     const storiesCollection = client
       .db("uniqueTravel")
       .collection("touristStories");
@@ -68,10 +78,25 @@ async function run() {
       res.send(result);
     });
 
+    //get stories by email
+    app.get("/stories/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await storiesCollection.find(query).toArray();
+      res.send(result);
+    });
     //post story
     app.post("/addStory", async (req, res) => {
       const data = req.body;
       const result = await storiesCollection.insertOne(data);
+      res.send(result);
+    });
+
+    //delete story
+    app.delete("/story/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await storiesCollection.deleteOne(query);
       res.send(result);
     });
 
