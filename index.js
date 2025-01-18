@@ -49,7 +49,7 @@ async function run() {
       res.send(result);
     });
 
-    // stories related apis======================================
+    // bookings related apis======================================
     const bookingsCollection = client.db("uniqueTravel").collection("bookings");
 
     //post booking
