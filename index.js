@@ -59,6 +59,40 @@ async function run() {
       res.send(result);
     });
 
+    //bookings get by email
+    app.get("/bookings/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { "user.email": email };
+      const result = await bookingsCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    //get all bookings
+    app.get("/bookings", async (req, res) => {
+      const result = await bookingsCollection.find().toArray();
+      res.send(result);
+    });
+
+    //delete bookings
+    app.delete("/booking/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bookingsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    //applications related apis=================================
+    const applicationCollection = client
+      .db("uniqueTravel")
+      .collection("applications");
+
+    //post application
+    app.post("/application", async (req, res) => {
+      const applicationData = req.body;
+      const result = await applicationCollection.insertOne(applicationData);
+      res.send(result);
+    });
+
     // stories related apis======================================
     const storiesCollection = client
       .db("uniqueTravel")
@@ -85,6 +119,64 @@ async function run() {
       const result = await storiesCollection.find(query).toArray();
       res.send(result);
     });
+
+    //get story by id
+    app.get("/story/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await storiesCollection.findOne(query);
+      res.send(result);
+    });
+
+    //update story
+    app.put("/update-story/:id", async (req, res) => {
+      const id = req.params.id;
+      const { newPhotos, removedPhotos, title, excerpt } = req.body;
+
+      if (!id) {
+        return res.status(400).json({ error: "Story ID is required." });
+      }
+
+      const query = { _id: new ObjectId(id) };
+      let updateDoc = { title, excerpt }; // Always update title and excerpt
+
+      try {
+        let updateResult = false;
+
+        // Step 1: Update title and excerpt
+        const titleExcerptResult = await storiesCollection.updateOne(query, {
+          $set: updateDoc,
+        });
+        updateResult = titleExcerptResult.modifiedCount > 0;
+
+        // Step 2: Remove the photos that need to be deleted
+        if (removedPhotos && removedPhotos.length > 0) {
+          const removedPhotosResult = await storiesCollection.updateOne(query, {
+            $pull: { photo: { $in: removedPhotos } },
+          });
+          updateResult = updateResult || removedPhotosResult.modifiedCount > 0;
+        }
+
+        // Step 3: Add new photos
+        if (newPhotos && newPhotos.length > 0) {
+          const newPhotosResult = await storiesCollection.updateOne(query, {
+            $push: { photo: { $each: newPhotos } },
+          });
+          updateResult = updateResult || newPhotosResult.modifiedCount > 0;
+        }
+
+        // Check if any changes were made
+        if (updateResult) {
+          res.status(200).json({ message: "Story updated successfully." });
+        } else {
+          res.status(400).json({ error: "No changes were made to the story." });
+        }
+      } catch (error) {
+        console.error("Error updating story:", error);
+        res.status(500).json({ error: "Failed to update story" });
+      }
+    });
+
     //post story
     app.post("/addStory", async (req, res) => {
       const data = req.body;
