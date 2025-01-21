@@ -242,6 +242,32 @@ async function run() {
       res.send(result);
     });
 
+    //user get for search and filter
+    app.get("/users", async (req, res) => {
+      try {
+        const { search, role } = req.query;
+        const query = {};
+
+        if (search) {
+          query.$or = [
+            { name: { $regex: search, $options: "i" } },
+            { email: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        if (role) {
+          query.userType = role;
+        }
+
+        const users = await userCollection.find(query).toArray();
+
+        res.send(users);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).send({ error: "Failed to fetch users" });
+      }
+    });
+
     //user get by email
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
