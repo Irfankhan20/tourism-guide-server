@@ -86,10 +86,57 @@ async function run() {
       .db("uniqueTravel")
       .collection("applications");
 
+    //get all applications
+    app.get("/applications", async (req, res) => {
+      const result = await applicationCollection.find().toArray();
+      res.send(result);
+    });
+
     //post application
     app.post("/application", async (req, res) => {
       const applicationData = req.body;
       const result = await applicationCollection.insertOne(applicationData);
+      res.send(result);
+    });
+
+    //update application
+    app.patch("/application-update/:id", async (req, res) => {
+      const applicationId = req.params.id;
+      const query = { _id: new ObjectId(applicationId) };
+      const application = await applicationCollection.findOne(query);
+      console.log(application);
+
+      const userQuery = { _id: new ObjectId(application.userId) };
+      const user = await userCollection.findOne(userQuery);
+      console.log(user);
+
+      if (!application || !user) {
+        return res.status(404).send({ message: "Application not found" });
+      }
+
+      const userUpdate = {
+        $set: {
+          userType: "tourGuide",
+        },
+      };
+
+      const userUpdateResult = await userCollection.updateOne(
+        userQuery,
+        userUpdate
+      );
+      const applicationUpdateResult = await applicationCollection.updateOne(
+        query,
+        userUpdate
+      );
+
+      res.send({ userUpdateResult, applicationUpdateResult });
+    });
+
+    //delete application
+    app.delete("/application/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await applicationCollection.deleteOne();
       res.send(result);
     });
 
