@@ -49,6 +49,13 @@ async function run() {
       res.send(result);
     });
 
+    //post package
+    app.post("/add-package", async (req, res) => {
+      const data = req.body;
+      const result = await packageCollection.insertOne(data);
+      res.send(result);
+    });
+
     // bookings related apis======================================
     const bookingsCollection = client.db("uniqueTravel").collection("bookings");
 
@@ -352,6 +359,55 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+
+    //admin profile make=============================================
+    app.get("/admin-stats", async (req, res) => {
+      const totalPackages = await packageCollection.estimatedDocumentCount();
+      const totalStories = await storiesCollection.estimatedDocumentCount();
+      const result = await bookingsCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: {
+                $sum: "$price",
+              },
+            },
+          },
+        ])
+        .toArray();
+      const totalPayment = result.length > 0 ? result[0].totalRevenue : 0;
+
+      const userTypeCounts = await userCollection
+        .aggregate([
+          {
+            $group: {
+              _id: "$userType",
+              count: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      // Transform results into a key-value object
+      const userTypeSummary = userTypeCounts.reduce((acc, curr) => {
+        acc[curr._id] = curr.count;
+        return acc;
+      }, {});
+
+      // Extract totalTourGuides and totalTourists
+      const totalTourGuides = userTypeSummary["tourGuide"] || 0;
+      const totalTourists = userTypeSummary["tourist"] || 0;
+
+      res.send({
+        totalTourGuides,
+        totalTourists,
+        totalPackages,
+        totalStories,
+        totalPayment,
+      });
+    });
+    //===============================================================
 
     await client.db("admin").command({ ping: 1 });
     console.log(
