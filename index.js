@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
@@ -8,6 +10,7 @@ const port = process.env.PORT || 5000;
 //middlewares
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
 
 //=====================================================================
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.w7smd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -23,6 +26,62 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     await client.connect();
+
+    //jwt related apis==================================================
+
+    //create token
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.JSON_ACCESS_TOKEN, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
+    });
+
+    //middleware for token
+    const verifyToken = (req, res, next) => {
+      console.log("inside verify token", req.headers.authorization);
+      if (!req.headers.authorization) {
+        return res
+          .status(401)
+          .send({ message: "forbidden access from line 45" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      console.log(token);
+      jwt.verify(token, process.env.JSON_ACCESS_TOKEN, (err, decoded) => {
+        if (err) {
+          return res
+            .status(401)
+            .send({ message: "forbidden access from line 52" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
+
+    //middleware for verify admin
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.userType === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
+
+    //middleware for verify tourguide
+    const verifyTourGuide = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isTourGuide = user?.userType === "tourGuide";
+      if (!isTourGuide) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
 
     // packages related apis======================================
     const packageCollection = client.db("uniqueTravel").collection("packages");
@@ -66,13 +125,26 @@ async function run() {
       res.send(result);
     });
 
-    //bookings get by email
-    app.get("/bookings/:email", async (req, res) => {
+    //bookings get by useremail
+    app.get("/bookings/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { "user.email": email };
       const result = await bookingsCollection.find(query).toArray();
       res.send(result);
     });
+
+    //bookings get by guide-email
+    app.get(
+      "/guides-asigned-tours/:email",
+      verifyToken,
+      verifyTourGuide,
+      async (req, res) => {
+        const email = req.params.email;
+        const query = { "guide.email": email };
+        const result = await bookingsCollection.find(query).toArray();
+        res.send(result);
+      }
+    );
 
     //get all bookings
     app.get("/bookings", async (req, res) => {
@@ -88,13 +160,46 @@ async function run() {
       res.send(result);
     });
 
+    //update bookings for reject
+    app.patch("/bookings-reject/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          status: "Rejected",
+        },
+      };
+
+      const userUpdateResult = await bookingsCollection.updateOne(
+        query,
+        update
+      );
+      res.send(userUpdateResult);
+    });
+    //update bookings for accept
+    app.patch("/bookings-accept/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          status: "Accepted",
+        },
+      };
+
+      const userUpdateResult = await bookingsCollection.updateOne(
+        query,
+        update
+      );
+      res.send(userUpdateResult);
+    });
+
     //applications related apis=================================
     const applicationCollection = client
       .db("uniqueTravel")
       .collection("applications");
 
     //get all applications
-    app.get("/applications", async (req, res) => {
+    app.get("/applications", verifyToken, verifyAdmin, async (req, res) => {
       const result = await applicationCollection.find().toArray();
       res.send(result);
     });
@@ -112,6 +217,14 @@ async function run() {
       const query = { _id: new ObjectId(applicationId) };
       const application = await applicationCollection.findOne(query);
       console.log(application);
+
+      const applicationWithoutId = {
+        name: application.name,
+        photo: application.photo,
+        specialty: application.specialty,
+        contact: application.contact,
+        email: application.email,
+      };
 
       const userQuery = { _id: new ObjectId(application.userId) };
       const user = await userCollection.findOne(userQuery);
@@ -131,12 +244,12 @@ async function run() {
         userQuery,
         userUpdate
       );
-      const applicationUpdateResult = await applicationCollection.updateOne(
-        query,
-        userUpdate
+
+      const insertApplicationToGuide = await guideCollection.insertOne(
+        applicationWithoutId
       );
 
-      res.send({ userUpdateResult, applicationUpdateResult });
+      res.send({ userUpdateResult, insertApplicationToGuide });
     });
 
     //delete application
@@ -167,7 +280,7 @@ async function run() {
     });
 
     //get stories by email
-    app.get("/stories/:email", async (req, res) => {
+    app.get("/stories/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const result = await storiesCollection.find(query).toArray();
@@ -291,7 +404,7 @@ async function run() {
     });
 
     //all users
-    app.get("/allUsers", async (req, res) => {
+    app.get("/allUsers", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
@@ -323,7 +436,7 @@ async function run() {
     });
 
     //user get by email
-    app.get("/user/:email", async (req, res) => {
+    app.get("/user/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const user = await userCollection.findOne(query);
@@ -361,7 +474,7 @@ async function run() {
     });
 
     //admin profile make=============================================
-    app.get("/admin-stats", async (req, res) => {
+    app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
       const totalPackages = await packageCollection.estimatedDocumentCount();
       const totalStories = await storiesCollection.estimatedDocumentCount();
       const result = await bookingsCollection
