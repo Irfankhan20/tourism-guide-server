@@ -1,8 +1,9 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-require("dotenv").config();
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
@@ -25,7 +26,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     //jwt related apis==================================================
 
@@ -43,7 +44,7 @@ async function run() {
       console.log("inside verify token", req.headers.authorization);
       if (!req.headers.authorization) {
         return res
-          .status(401)
+          .status(403)
           .send({ message: "forbidden access from line 45" });
       }
       const token = req.headers.authorization.split(" ")[1];
@@ -51,7 +52,7 @@ async function run() {
       jwt.verify(token, process.env.JSON_ACCESS_TOKEN, (err, decoded) => {
         if (err) {
           return res
-            .status(401)
+            .status(403)
             .send({ message: "forbidden access from line 52" });
         }
         req.decoded = decoded;
@@ -522,7 +523,7 @@ async function run() {
     });
     //===============================================================
 
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
