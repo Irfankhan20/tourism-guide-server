@@ -561,6 +561,7 @@ async function run() {
 
       const paymentInformation = {
         bookId: paymentData?.bookId,
+        tourDate: paymentData?.tourDate,
         email: paymentData?.email,
         name: paymentData?.name,
         phone: paymentData?.phone,
