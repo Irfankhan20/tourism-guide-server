@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const axios = require("axios");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
@@ -11,6 +12,7 @@ const port = process.env.PORT || 5000;
 //middlewares
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded());
 app.use(cookieParser());
 
 //=====================================================================
@@ -147,6 +149,14 @@ async function run() {
       }
     );
 
+    //get booking by id
+    app.get("/booking/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bookingsCollection.findOne(query);
+      res.send(result);
+    });
+
     //get all bookings
     app.get("/bookings", async (req, res) => {
       const result = await bookingsCollection.find().toArray();
@@ -161,7 +171,7 @@ async function run() {
       res.send(result);
     });
 
-    //update bookings for reject
+    //update bookings for reject by guide
     app.patch("/bookings-reject/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -177,7 +187,7 @@ async function run() {
       );
       res.send(userUpdateResult);
     });
-    //update bookings for accept
+    //update bookings for accept by guide
     app.patch("/bookings-accept/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -208,6 +218,14 @@ async function run() {
     //post application
     app.post("/application", async (req, res) => {
       const applicationData = req.body;
+      const query = { email: applicationData.email };
+      const existingUser = await applicationCollection.findOne(query);
+      if (existingUser) {
+        return res.send({
+          message: "user already exists",
+          insertedId: null,
+        });
+      }
       const result = await applicationCollection.insertOne(applicationData);
       res.send(result);
     });
@@ -437,7 +455,7 @@ async function run() {
     });
 
     //user get by email
-    app.get("/user/:email", verifyToken, async (req, res) => {
+    app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const user = await userCollection.findOne(query);
@@ -474,17 +492,169 @@ async function run() {
       res.send(result);
     });
 
+    //discount coupon apis==========================================
+    const cuponCollection = client
+      .db("uniqueTravel")
+      .collection("discountCupon");
+
+    //get all coupon
+    app.get("/allCupons", verifyToken, async (req, res) => {
+      const result = await cuponCollection.find().toArray();
+      res.send(result);
+    });
+
+    //payment related apis==========================================
+    const paymentCollection = client.db("uniqueTravel").collection("payment");
+
+    //post payment
+    app.post("/create-payment", verifyToken, async (req, res) => {
+      const paymentData = req.body;
+      console.log(paymentData);
+
+      const randomCode = Array(4)
+        .fill(0)
+        .map(() => Math.random().toString(36).substring(2, 10))
+        .join("")
+        .substring(0, 16);
+      console.log(randomCode);
+
+      const initialData = {
+        store_id: `${process.env.STORE_ID}`,
+        store_passwd: `${process.env.STORE_PASS}`,
+        total_amount: paymentData?.amountToPay,
+        currency: "BDT",
+        tran_id: `${randomCode}`,
+        total_amount: `${paymentData?.totalAmount}`,
+        success_url: "http://localhost:5000/success-payment",
+        fail_url: "http://localhost:5000/fail",
+        cancel_url: "http://localhost:5000/cancle",
+        cus_name: `${paymentData?.name}`,
+        cus_email: `${paymentData?.email}`,
+        cus_add1: "Dhaka",
+        cus_add2: "Dhaka",
+        cus_city: `${paymentData?.city}`,
+        cus_state: "Dhaka",
+        cus_postcode: 1000,
+        product_name: `${paymentData?.packageName}`,
+        product_category: "tour",
+        product_profile: "general",
+        cus_country: `${paymentData?.address}`,
+        cus_phone: `${paymentData?.phone}`,
+        cus_fax: "01711111111",
+        shipping_method: "No",
+        multi_card_name: "mastercard,visacard,amexcard",
+        value_a: "ref001_A",
+        value_b: "ref002_B",
+        value_c: "ref003_C",
+        value_d: "ref004_D",
+      };
+
+      const response = await axios({
+        method: "POST",
+        url: "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+        data: initialData,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+      console.log(response);
+
+      const paymentInformation = {
+        bookId: paymentData?.bookId,
+        email: paymentData?.email,
+        name: paymentData?.name,
+        phone: paymentData?.phone,
+        address: paymentData?.address,
+        city: paymentData?.city,
+        payAmount: paymentData?.payAmount,
+        packageName: paymentData?.packageName,
+        totalAmount: paymentData?.totalAmount,
+        status: "pending",
+        trxId: randomCode,
+      };
+
+      const sendPaymentInfoToDb = await paymentCollection.insertOne(
+        paymentInformation
+      );
+
+      if (sendPaymentInfoToDb) {
+        res.send({
+          paymentUrl: response.data.GatewayPageURL,
+        });
+      }
+    });
+
+    //success payment
+    app.post("/success-payment", async (req, res) => {
+      const successData = req.body;
+      console.log("from success-payment", successData);
+
+      if (successData.status !== "VALID") {
+        throw new Error("UNauthorized payment, Invalid Payment Error");
+      }
+
+      const query = { trxId: successData.tran_id };
+      const getPaymentInfo = await paymentCollection.findOne(query);
+      console.log(getPaymentInfo);
+
+      const bookId = { _id: new ObjectId(getPaymentInfo.bookId) };
+      const getBookInfo = await bookingsCollection.findOne(bookId);
+      console.log(getBookInfo);
+      const bookingUpdateDoc = {
+        $set: {
+          status: "In Review",
+        },
+      };
+      const updateBookingData = await bookingsCollection.updateOne(
+        bookId,
+        bookingUpdateDoc
+      );
+
+      const paymentUpdateDoc = {
+        $set: {
+          status: "success",
+        },
+      };
+      const updatePaymentData = await paymentCollection.updateOne(
+        query,
+        paymentUpdateDoc
+      );
+      console.log("update payment data", updatePaymentData);
+      console.log("update booking data", updateBookingData);
+
+      res.redirect("http://localhost:5173/dashboard/paymentSuccess");
+    });
+
+    //failed payment
+    app.post("/fail", async (req, res) => {
+      res.redirect("http://localhost:5173/dashboard/paymentFailed");
+    });
+
+    //cancle payment
+    app.post("/cancle", async (req, res) => {
+      res.redirect("http://localhost:5173/dashboard/paymentFailed");
+    });
+
+    //get all payments info
+    app.get("/payments", verifyToken, verifyAdmin, async (req, res) => {
+      const result = await paymentCollection.find().toArray();
+      res.send(result);
+    });
+
     //admin profile make=============================================
     app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
       const totalPackages = await packageCollection.estimatedDocumentCount();
       const totalStories = await storiesCollection.estimatedDocumentCount();
-      const result = await bookingsCollection
+      const result = await paymentCollection
         .aggregate([
+          {
+            $match: { status: "success" }, // Filter for successful payments
+          },
           {
             $group: {
               _id: null,
               totalRevenue: {
-                $sum: "$price",
+                $sum: "$totalAmount",
               },
             },
           },
