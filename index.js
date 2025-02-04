@@ -10,7 +10,12 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 //middlewares
-app.use(cors());
+app.use(
+  cors({
+    origin: ["https://unique-travel-c3fd8.web.app", "http://localhost:5173"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded());
 app.use(cookieParser());
@@ -525,9 +530,9 @@ async function run() {
         currency: "BDT",
         tran_id: `${randomCode}`,
         total_amount: `${paymentData?.totalAmount}`,
-        success_url: "http://localhost:5000/success-payment",
-        fail_url: "http://localhost:5000/fail",
-        cancel_url: "http://localhost:5000/cancle",
+        success_url: "https://unique-travel-server.vercel.app/success-payment",
+        fail_url: "https://unique-travel-server.vercel.app/fail",
+        cancel_url: "https://unique-travel-server.vercel.app/cancle",
         cus_name: `${paymentData?.name}`,
         cus_email: `${paymentData?.email}`,
         cus_add1: "Dhaka",
@@ -623,7 +628,9 @@ async function run() {
       console.log("update payment data", updatePaymentData);
       console.log("update booking data", updateBookingData);
 
-      res.redirect("http://localhost:5173/dashboard/paymentSuccess");
+      res.redirect(
+        "https://unique-travel-c3fd8.web.app/dashboard/paymentSuccess"
+      );
     });
 
     //failed payment
